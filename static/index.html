@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="ja">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="design-token" content="__TOKEN__"><title>Turbine Design Desk — 設計情報管理</title><link rel="stylesheet" href="/style.css"><script defer src="/app.js"></script></head>
+<body>
+<aside class="sidebar">
+  <a class="brand" href="#" id="brand"><span class="brand-mark">✳</span><span>TURBINE<span class="brand-sub">DESIGN DESK</span></span></a>
+  <div class="workspace-label">WORKSPACE</div>
+  <button id="home" class="nav-home">▦ <span>設計プロジェクト</span></button>
+  <a href="/manual/" target="_blank" rel="noopener" class="tree-button">? <span>サンプル操作マニュアル</span></a>
+  <div id="project-nav"></div>
+  <div class="sidebar-bottom"><span class="local-dot"></span> このPCに保存<div>設計情報管理 · v0.1</div></div>
+</aside>
+<main>
+  <header class="topbar"><div id="breadcrumb">ワークスペース <span>/</span> 設計プロジェクト</div><span class="offline-label">LOCAL WORKSPACE</span></header>
+  <div id="content" aria-live="polite"></div>
+</main>
+<dialog id="editor" aria-labelledby="dialog-title"><form id="editor-form"><div class="dialog-head"><div><div class="eyebrow">DESIGN INFORMATION</div><h2 id="dialog-title"></h2></div><button type="button" id="dialog-close" class="icon-button" aria-label="閉じる">×</button></div><div id="dialog-fields"></div><p id="form-error" class="form-error" role="alert"></p><div class="dialog-actions"><button type="button" id="dialog-cancel" class="button">キャンセル</button><button type="submit" id="dialog-submit" class="button primary">保存する</button></div></form></dialog>
+<dialog id="confirmation" aria-labelledby="confirm-title"><div class="eyebrow">CONFIRM ACTION</div><h2 id="confirm-title">操作の確認</h2><p id="confirm-message" class="note-body"></p><div class="dialog-actions"><button type="button" id="confirm-no" class="button">キャンセル</button><button type="button" id="confirm-yes" class="button primary">続ける</button></div></dialog>
+<div id="toast" role="status"></div>
+<input id="import-file" type="file" accept=".json,application/json" hidden>
+<input id="attachment-file" type="file" hidden>
+</body></html>

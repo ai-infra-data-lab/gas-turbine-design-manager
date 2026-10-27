@@ -1,0 +1,336 @@
+{
+  "format": "gas-turbine-manager",
+  "bundle_version": 1,
+  "exported_at": "2026-10-24T07:06:21+00:00",
+  "project": {
+    "schema_version": 1,
+    "id": "8b59e52e-4b2c-41cb-8429-a2017cd760d8",
+    "name": "【サンプル】100 kW級GT・基準案 A",
+    "code": "DEMO-GT-A",
+    "application": "小型発電用（操作演習）",
+    "architecture": "一軸・遠心圧縮機＋ラジアルタービン",
+    "owner": "演習用 設計チーム",
+    "purpose": "操作説明用の架空値。計算結果・試験値・設計成立性の確認値ではありません。\n仕様・部品・資料を関連付け、別案比較と履歴復元の操作を学ぶ。",
+    "status": "designing",
+    "requirements": [
+      {
+        "id": "a6d24bcc-a156-42ee-a96f-2fa7c1731938",
+        "name": "目標軸出力",
+        "value": "100",
+        "unit": "kW",
+        "source": "演習用要求仕様書 1版",
+        "note": "要求値。実際に100 kW出力できると確認した値ではない。"
+      },
+      {
+        "id": "d2aa3ffe-9762-4c31-b88e-d5997f11db92",
+        "name": "設計回転数",
+        "value": "60000",
+        "unit": "rpm",
+        "source": "演習用要求仕様書 1版",
+        "note": "共通軸の要求回転数。比較案Bは55000 rpm。"
+      },
+      {
+        "id": "5e6834e9-85f9-442f-95f9-7f7682280fef",
+        "name": "空気流量",
+        "value": "1.20",
+        "unit": "kg/s",
+        "source": "演習用要求仕様書 1版",
+        "note": "圧縮機入口の全流量。修正流量ではない。"
+      },
+      {
+        "id": "1d218168-7403-40fe-8662-a52316d77c6b",
+        "name": "圧縮機全圧比",
+        "value": "3.8",
+        "unit": "—",
+        "source": "演習用要求仕様書 1版",
+        "note": "圧縮機出口全圧 / 圧縮機入口全圧の目標値。"
+      },
+      {
+        "id": "c6c273ae-f225-4f5b-8b00-0acb54eed9f1",
+        "name": "タービン入口全温",
+        "value": "1123",
+        "unit": "K",
+        "source": "演習用要求仕様書 1版",
+        "note": "全温。静温と区別して登録。"
+      },
+      {
+        "id": "b60fc972-64a4-47ec-8f3e-90f494e5f83c",
+        "name": "大気温度",
+        "value": "288.15",
+        "unit": "K",
+        "source": "演習用要求仕様書 1版",
+        "note": "演習で固定した入口環境。"
+      },
+      {
+        "id": "f2b7e56d-33d8-4931-b47d-4e0d45f1bece",
+        "name": "大気圧力",
+        "value": "101.325",
+        "unit": "kPa（絶対圧）",
+        "source": "演習用要求仕様書 1版",
+        "note": "ゲージ圧ではない。"
+      },
+      {
+        "id": "f055114e-9ac0-48e8-a479-ec153187da01",
+        "name": "熱効率の目標",
+        "value": "",
+        "unit": "%",
+        "source": "未決定：サイクル計算モジュール追加後に検討",
+        "note": "空欄は未知・未定を意味する。0%に置換しない。"
+      }
+    ],
+    "components": [
+      {
+        "id": "f55fbb5d-1fc0-44fd-b437-cd7980a88541",
+        "kind": "inlet",
+        "status": "draft",
+        "name": "吸気系",
+        "stage": "",
+        "owner": "",
+        "description": "",
+        "parameters": []
+      },
+      {
+        "id": "4daa8dd8-a692-4721-991d-2ee724842c41",
+        "kind": "compressor",
+        "status": "reviewing",
+        "name": "遠心圧縮機",
+        "stage": "第1段 / 入口側",
+        "owner": "空力担当（演習）",
+        "description": "寸法は操作説明用の仮定。将来、Blade Designerへ渡す情報を整理する例。\n圧縮比・効率・寸法の成立性は未検証。",
+        "parameters": [
+          {
+            "id": "78ae3ade-9962-44d8-82df-e6c672648a66",
+            "name": "インペラ出口外径",
+            "value": "110",
+            "unit": "mm",
+            "source": "演習用寸法案 A-01",
+            "note": "図面上の外径。ケーシング外径ではない。"
+          },
+          {
+            "id": "5142b5df-9bc5-484c-9a0e-29f3508e4ead",
+            "name": "入口チップ径",
+            "value": "48",
+            "unit": "mm",
+            "source": "演習用寸法案 A-01",
+            "note": ""
+          },
+          {
+            "id": "95e086cb-f44c-4eee-bcd9-eeee2cdcf25e",
+            "name": "出口翼高さ",
+            "value": "6.5",
+            "unit": "mm",
+            "source": "演習用寸法案 A-01",
+            "note": ""
+          },
+          {
+            "id": "117c6963-d8ca-4b93-b069-df72f22ac8d6",
+            "name": "主翼枚数",
+            "value": "6",
+            "unit": "枚",
+            "source": "演習用寸法案 A-01",
+            "note": ""
+          },
+          {
+            "id": "6d514bce-ae6c-4b44-a70d-1b11b3ac6e90",
+            "name": "スプリッター枚数",
+            "value": "6",
+            "unit": "枚",
+            "source": "演習用寸法案 A-01",
+            "note": "主翼とは別項目。合計枚数の自動計算は行わない。"
+          },
+          {
+            "id": "1fd4234a-6bdf-4ac9-8a56-5695198e0287",
+            "name": "チップ隙間",
+            "value": "0.30",
+            "unit": "mm",
+            "source": "演習用寸法案 A-01",
+            "note": "冷態での片側隙間の仮定。"
+          },
+          {
+            "id": "73fe883b-b5c8-44d1-9e90-56de45570e16",
+            "name": "断熱効率の目標",
+            "value": "0.78",
+            "unit": "—",
+            "source": "演習用仮定",
+            "note": "目標値。CFDや試験で確認した結果ではない。"
+          }
+        ]
+      },
+      {
+        "id": "661074b8-772b-43ed-9c92-5e99ba0ff679",
+        "kind": "combustor",
+        "status": "draft",
+        "name": "燃焼器",
+        "stage": "",
+        "owner": "",
+        "description": "",
+        "parameters": [
+          {
+            "id": "aa6775fd-f0c0-4a0c-a692-c908ef730cb4",
+            "name": "圧力損失率の仮定",
+            "value": "4.0",
+            "unit": "%",
+            "source": "演習用仮定",
+            "note": "入口全圧に対する全圧低下率。計算はしない。"
+          }
+        ]
+      },
+      {
+        "id": "b51481a1-24ac-4e51-a0f9-ff3a2d141431",
+        "kind": "turbine",
+        "status": "draft",
+        "name": "ラジアルタービン",
+        "stage": "第1段 / 燃焼器下流",
+        "owner": "タービン担当（演習）",
+        "description": "圧縮機と共通軸の構成を仮定。熱・強度・寿命の計算は未実施。",
+        "parameters": [
+          {
+            "id": "124582ee-e2cf-4118-a74e-73f6ec1b9167",
+            "name": "ロータ入口外径",
+            "value": "95",
+            "unit": "mm",
+            "source": "演習用寸法案 T-01",
+            "note": ""
+          },
+          {
+            "id": "aecd373d-77ee-4fd3-ad9c-76483afb3c6a",
+            "name": "ロータ翼枚数",
+            "value": "13",
+            "unit": "枚",
+            "source": "演習用寸法案 T-01",
+            "note": ""
+          },
+          {
+            "id": "bedcfbc0-b58b-42ec-a9ea-8239ca6b23d9",
+            "name": "材料",
+            "value": "",
+            "unit": "",
+            "source": "未選定",
+            "note": "材料特性・許容温度の値はまだ登録しない。"
+          }
+        ]
+      },
+      {
+        "id": "f732ce97-d3b9-4ba7-8e00-34babfdcadce",
+        "kind": "exhaust",
+        "status": "draft",
+        "name": "排気系",
+        "stage": "",
+        "owner": "",
+        "description": "",
+        "parameters": []
+      },
+      {
+        "id": "4ca2882c-5ddb-4cad-ad18-1d40316f8b77",
+        "kind": "shaft",
+        "status": "draft",
+        "name": "ロータ・軸",
+        "stage": "共通軸",
+        "owner": "",
+        "description": "圧縮機とタービンを接続する軸。将来のロータ解析用情報を記録。",
+        "parameters": [
+          {
+            "id": "461ebb33-eb0b-4255-91a2-85f00f9f19b1",
+            "name": "軸の代表直径",
+            "value": "20",
+            "unit": "mm",
+            "source": "演習用軸配置 S-01",
+            "note": ""
+          },
+          {
+            "id": "e8e321d7-7126-4831-81ce-54302805297e",
+            "name": "軸受間距離",
+            "value": "220",
+            "unit": "mm",
+            "source": "演習用軸配置 S-01",
+            "note": ""
+          }
+        ]
+      },
+      {
+        "id": "982a87c9-1497-414a-8b70-3d7c77029b25",
+        "kind": "bearing",
+        "status": "draft",
+        "name": "軸受",
+        "stage": "",
+        "owner": "",
+        "description": "",
+        "parameters": [
+          {
+            "id": "d3de60ae-d599-4e70-a4f4-a17bf17a2a79",
+            "name": "支持位置の数",
+            "value": "2",
+            "unit": "箇所",
+            "source": "演習用軸配置 S-01",
+            "note": ""
+          },
+          {
+            "id": "77c8c9d2-97db-4d92-bf1b-f5f4dfc4ef2f",
+            "name": "軸受剛性",
+            "value": "",
+            "unit": "N/m",
+            "source": "未評価",
+            "note": "ロータ解析前に必要。値の推定・計算は本アプリでは行わない。"
+          }
+        ]
+      },
+      {
+        "id": "f35ab482-2934-43f3-a9b6-1b15571a5a63",
+        "kind": "casing",
+        "status": "draft",
+        "name": "ケーシング",
+        "stage": "",
+        "owner": "",
+        "description": "",
+        "parameters": []
+      }
+    ],
+    "notes": [
+      {
+        "id": "55ccb39f-ba17-4d45-82c1-29e7f37009b6",
+        "title": "この案件の読み方",
+        "body": "操作説明用の架空値。計算結果・試験値・設計成立性の確認値ではありません。\n値の登録・編集・比較が目的です。未知値は空欄にしています。\n参照資料名と章番号を出典欄に残す練習ができます。",
+        "created_at": "2026-10-24T07:06:21+00:00"
+      },
+      {
+        "id": "fb4eb648-a06a-4b24-90c9-9fcfb9953082",
+        "title": "基準案Aと低回転案Bの検討",
+        "body": "A：60000 rpm、インペラ出口外径110 mm。\nB：55000 rpm、同外径118 mm、効率目標0.80。\n低回転化と外径変更を一緒に管理する例です。効率改善や出力維持を確認した設計ではありません。",
+        "created_at": "2026-10-24T07:06:21+00:00"
+      }
+    ],
+    "links": [
+      {
+        "id": "8e7cfc7d-81eb-4df1-9ad8-a66d966a44da",
+        "title": "サンプル操作マニュアル（このPC）",
+        "url": "http://127.0.0.1:8772/manual/",
+        "component_id": "",
+        "note": "サンプル起動中に閲覧できます。数値の技術出典ではありません。"
+      }
+    ],
+    "attachments": [
+      {
+        "id": "54743f55-6bea-4810-a239-33acce69d2d3",
+        "name": "01_要求仕様書_演習用.txt",
+        "size": 491,
+        "component_id": "",
+        "added_at": "2026-10-24T07:06:21+00:00"
+      },
+      {
+        "id": "b2c79abf-0fd1-49be-8126-5a8674050ac0",
+        "name": "02_圧縮機_入力一覧_A.csv",
+        "size": 617,
+        "component_id": "4daa8dd8-a692-4721-991d-2ee724842c41",
+        "added_at": "2026-10-24T07:06:21+00:00"
+      }
+    ],
+    "extensions": {}
+  },
+  "revision": 4,
+  "created_at": "2026-10-24T07:06:21+00:00",
+  "updated_at": "2026-10-24T07:06:21+00:00",
+  "files": {
+    "54743f55-6bea-4810-a239-33acce69d2d3": "77u/5ryU57+S55So6KaB5rGC5LuV5qeY5pu4IDHniYgK5pON5L2c6Kqs5piO55So44Gu5p6256m65YCk44CC6KiI566X57WQ5p6c44O76Kmm6aiT5YCk44O76Kit6KiI5oiQ56uL5oCn44Gu56K66KqN5YCk44Gn44Gv44GC44KK44G+44Gb44KT44CCCgrnm67mqJnou7jlh7rlips6IDEwMCBrVwroqK3oqIjlm57ou6LmlbA6IDYwMDAwIHJwbQrnqbrmsJfmtYHph486IDEuMjAga2cvc++8iOWFqOa1gemHj++8iQrlnKfnuK7mqZ/lhajlnKfmr5Q6IDMuOArjgr/jg7zjg5Pjg7PlhaXlj6PlhajmuKk6IDExMjMgSwrlpKfmsJfmuKnluqY6IDI4OC4xNSBLCuWkp+awl+Wcp+WKmzogMTAxLjMyNSBrUGHvvIjntbblr77lnKfvvIkK54ax5Yq5546H55uu5qiZOiDmnKrlrpoKCuioreioiOWApOOBruaVtOWQiOaAp+OAgeeGseWKm+WtpuaAp+iDveOAgeW/nOWKm+OAgeaMr+WLleOAgeijvemAoOWPr+iDveaAp+OBruaknOiovOOBr+ihjOOBo+OBpuOBhOOBvuOBm+OCk+OAggo=",
+    "b2c79abf-0fd1-49be-8126-5a8674050ac0": "77u/6aCF55uuLOWApCzljZjkvY0s5Ye65YW4LOWCmeiAgw0K44Kk44Oz44Oa44Op5Ye65Y+j5aSW5b6ELDExMCxtbSzmvJTnv5LnlKjlr7jms5XmoYggQS0wMSzlm7PpnaLkuIrjga7lpJblvoTjgILjgrHjg7zjgrfjg7PjgrDlpJblvoTjgafjga/jgarjgYTjgIINCuWFpeWPo+ODgeODg+ODl+W+hCw0OCxtbSzmvJTnv5LnlKjlr7jms5XmoYggQS0wMSwNCuWHuuWPo+e/vOmrmOOBlSw2LjUsbW0s5ryU57+S55So5a+45rOV5qGIIEEtMDEsDQrkuLvnv7zmnprmlbAsNizmnpos5ryU57+S55So5a+45rOV5qGIIEEtMDEsDQrjgrnjg5fjg6rjg4Pjgr/jg7zmnprmlbAsNizmnpos5ryU57+S55So5a+45rOV5qGIIEEtMDEs5Li757+844Go44Gv5Yil6aCF55uu44CC5ZCI6KiI5p6a5pWw44Gu6Ieq5YuV6KiI566X44Gv6KGM44KP44Gq44GE44CCDQrjg4Hjg4Pjg5fpmpnplpMsMC4zMCxtbSzmvJTnv5LnlKjlr7jms5XmoYggQS0wMSzlhrfmhYvjgafjga7niYflgbTpmpnplpPjga7ku67lrprjgIINCuaWreeGseWKueeOh+OBruebruaomSwwLjc4LOKAlCzmvJTnv5LnlKjku67lrpos55uu5qiZ5YCk44CCQ0ZE44KE6Kmm6aiT44Gn56K66KqN44GX44Gf57WQ5p6c44Gn44Gv44Gq44GE44CCDQo="
+  }
+}

@@ -1,0 +1,10 @@
+__pycache__/
+data/
+artifacts/
+samples/*.sqlite3
+*.sqlite3*
+*.db
+*.log
+.env
+.env.*
+.venv/
