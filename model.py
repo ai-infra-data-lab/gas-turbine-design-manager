@@ -6,6 +6,8 @@ import json
 import uuid
 from datetime import datetime, timezone
 
+from stations import CODE, GROUPS, validate_layout
+
 SCHEMA = 1
 STATUSES = ("draft", "designing", "reviewing", "approved", "archived")
 KINDS = ("inlet", "compressor", "combustor", "turbine", "exhaust", "shaft", "bearing", "casing", "heat_exchanger", "auxiliary", "other")
@@ -59,6 +61,51 @@ def parameters(items):
     } for x in rows(items, "設計項目")])
 
 
+def evaluation_stations(items, components):
+    component_kinds = {part["id"]: part["kind"] for part in components}
+    result = []
+    for item in rows(items, "評価断面", 300):
+        group = item.get("group")
+        if not isinstance(group, str) or group not in GROUPS:
+            raise ValueError("評価断面の区分が不正です。")
+        code = text(item.get("code"), "断面ID", 40, True).upper()
+        if not CODE.fullmatch(code) or not code.startswith(GROUPS[group] + "-"):
+            raise ValueError(f"断面IDは {GROUPS[group]}- から始め、英数字とハイフンを使ってください。")
+        sequence = item.get("sequence")
+        if type(sequence) is not int or not 0 <= sequence <= 10000:
+            raise ValueError("流れ順は0〜10000の整数で指定してください。")
+        component_id = text(item.get("component_id", ""), "対象部品", 36)
+        if component_id and (group == "engine" or component_kinds.get(component_id) != group):
+            raise ValueError("評価断面の区分に合う対象部品を選んでください。")
+        engine_id = text(item.get("engine_station_id", ""), "全機側の対応断面", 36)
+        cycle_id = text(item.get("cycle_station_id", ""), "Cycle Studio位置ID", 1)
+        cooled_cycle_id = text(item.get("cooled_cycle_station_id", cycle_id), "冷却時の位置ID", 1)
+        if any(value and (group != "engine" or value not in "012345") for value in (cycle_id, cooled_cycle_id)):
+            raise ValueError("Cycle Studio位置IDはガスタービン全体の断面に0〜5を指定できます。")
+        template_key = text(item.get("template_key", ""), "ひな形ID", 40)
+        if template_key and (not CODE.fullmatch(template_key) or not template_key.startswith(GROUPS[group] + "-")):
+            raise ValueError("評価断面のひな形IDが不正です。")
+        result.append({
+            "id": identifier(item.get("id")), "group": group, "code": code,
+            "name": text(item.get("name"), "断面名", 150, True), "sequence": sequence,
+            "position": text(item.get("position", ""), "位置の定義", 1000),
+            "quantities": text(item.get("quantities", ""), "評価量", 500),
+            "basis": text(item.get("basis", ""), "集計・座標の条件", 1000),
+            "component_id": component_id, "engine_station_id": engine_id, "cycle_station_id": cycle_id,
+            "cooled_cycle_station_id": cooled_cycle_id, "template_key": template_key,
+        })
+    unique(result)
+    for field in ("code", "template_key", "cycle_station_id", "cooled_cycle_station_id"):
+        assigned = [item[field] for item in result if item[field]]
+        if len(set(assigned)) != len(assigned):
+            raise ValueError("断面ID、ひな形ID、または同じ冷却条件のCycle Studio位置IDが重複しています。")
+    engine_ids = {item["id"] for item in result if item["group"] == "engine"}
+    for item in result:
+        if item["engine_station_id"] and (item["group"] == "engine" or item["engine_station_id"] not in engine_ids):
+            raise ValueError("全機側の対応断面が見つかりません。断面の対応を見直してください。")
+    return result
+
+
 def validate_project(raw):
     if not isinstance(raw, dict) or type(raw.get("schema_version")) is not int or raw.get("schema_version") != SCHEMA:
         raise ValueError("対応していない設計データ形式です。")
@@ -84,6 +131,10 @@ def validate_project(raw):
                            "description": text(item.get("description", ""), "部品メモ", 10000),
                            "parameters": parameters(item.get("parameters", []))})
     result["components"] = unique(components)
+    if "stations" in raw:
+        result["stations"] = evaluation_stations(raw["stations"], components)
+    if "station_layout" in raw:
+        result["station_layout"] = validate_layout(raw["station_layout"])
     component_ids = {x["id"] for x in components}
 
     def component_ref(item):

@@ -16,6 +16,12 @@ ROOT = Path(__file__).resolve().parent
 TOKEN = secrets.token_urlsafe(32)
 
 
+def decode_upload(encoded, label):
+    if not isinstance(encoded, str) or len(encoded) > 7_000_000:
+        raise ValueError(f"{label}は1件5MB以内です。")
+    return base64.b64decode(encoded, validate=True)
+
+
 class Handler(BaseHTTPRequestHandler):
     def send(self, status, data, mime="application/json; charset=utf-8", filename=None):
         if not isinstance(data, bytes):
@@ -73,6 +79,13 @@ class Handler(BaseHTTPRequestHandler):
                 return self.json(self.server.store.get(get("id")))
             if url.path == "/api/history":
                 return self.json(self.server.store.history(get("id")))
+            if url.path == "/api/results":
+                return self.json(self.server.store.design_results(get("id")))
+            if url.path == "/api/result-targets":
+                return self.json(self.server.store.result_targets(get("id"), int(get("revision"))))
+            if url.path == "/api/result-file":
+                name, content = self.server.store.result_file(get("project"), get("id"), get("part"))
+                return self.send(200, content, "application/octet-stream", filename=name)
             if url.path == "/api/export":
                 bundle = self.server.store.export(get("id"))
                 return self.send(200, json.dumps(bundle, ensure_ascii=False, indent=2), filename="design-project.json")
@@ -108,14 +121,21 @@ class Handler(BaseHTTPRequestHandler):
                 result = store.save(project, data.get("revision"))
             elif self.path == "/api/clone":
                 result = store.clone(data.get("id"), data.get("name"))
+            elif self.path == "/api/station-layout":
+                result = store.configure_stations(data.get("id"), data.get("revision"), data.get("layout"))
             elif self.path == "/api/restore":
                 result = store.restore(data.get("id"), data.get("revision"), data.get("history_id"))
             elif self.path == "/api/upload":
-                encoded = data.get("data")
-                if not isinstance(encoded, str) or len(encoded) > 7_000_000:
-                    raise ValueError("添付ファイルは1件5MB以内です。")
-                content = base64.b64decode(encoded, validate=True)
+                content = decode_upload(data.get("data"), "添付ファイル")
                 result = store.upload(data.get("id"), data.get("revision"), data.get("name", ""), content, data.get("component_id", ""))
+            elif self.path == "/api/result-import":
+                content = decode_upload(data.get("primary"), "成果物")
+                handoff = data.get("handoff")
+                if handoff is not None:
+                    handoff = decode_upload(handoff, "手渡し記録")
+                result = store.register_result(data.get("id"), data.get("revision"), data.get("source_revision"),
+                                               data.get("component_id", ""), data.get("kind"), content, handoff,
+                                               blade_ids=data.get("blade_ids"), replaces_blade_id=data.get("replaces_blade_id"))
             elif self.path == "/api/import":
                 result = store.import_bundle(data.get("bundle"))
             else:

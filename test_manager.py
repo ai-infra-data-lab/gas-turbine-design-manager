@@ -11,6 +11,7 @@ from pathlib import Path
 from model import new_project, uid, validate_project
 from server import TOKEN, make_server
 from store import Conflict, Store
+from test_results import blade_example, cycle_example, encoded
 
 
 class StorageTests(unittest.TestCase):
@@ -211,6 +212,135 @@ class APITests(unittest.TestCase):
         self.assertEqual(self.request("/api/projects", headers={"Host": "example.com"})[0], 403)
         self.assertEqual(self.request("/../store.py")[0], 404)
         self.assertEqual(self.request("/api/unknown", {})[0], 404)
+
+    def test_result_import_list_and_original_download(self):
+        status, body, _ = self.request("/api/new", {"name": "成果物API検証", "template": "single_shaft"})
+        self.assertEqual(status, 200)
+        project = json.loads(body)["project"]
+        project_id = project["id"]
+        case = cycle_example()
+        shape, handoff = blade_example(case)
+        source = {"id": project_id, "revision": 1, "source_revision": 1}
+        cycle = {**source, "kind": "cycle", "primary": base64.b64encode(encoded(case)).decode()}
+        self.assertEqual(self.request("/api/result-import", cycle, {"X-Design-Token": "wrong"})[0], 403)
+        status, body, _ = self.request("/api/result-import", cycle)
+        self.assertEqual(status, 200)
+        cycle_id = json.loads(body)["result"]["id"]
+        targets = f"/api/result-targets?id={project_id}&revision=1"
+        status, body, _ = self.request(targets)
+        self.assertEqual(status, 200)
+        compressor_id = next(c["id"] for c in project["components"] if c["kind"] == "compressor")
+        self.assertIn(compressor_id, [c["id"] for c in json.loads(body)])
+        blade = {**source, "kind": "blade", "component_id": compressor_id,
+                 "primary": base64.b64encode(shape).decode(), "handoff": base64.b64encode(encoded(handoff)).decode()}
+        status, body, _ = self.request("/api/result-import", blade)
+        self.assertEqual(status, 200)
+        blade_id = json.loads(body)["result"]["id"]
+        project["purpose"] = "設計条件を更新"
+        self.assertEqual(self.request("/api/save", {"project": project, "revision": 1})[0], 200)
+        status, body, _ = self.request(f"/api/results?id={project_id}")
+        self.assertEqual(status, 200)
+        listed = json.loads(body)
+        self.assertEqual(listed["revision"], 2)
+        result = next(item for item in listed["results"] if item["id"] == blade_id)
+        self.assertTrue(result["outdated"])
+        self.assertEqual(result["cycle_result_id"], cycle_id)
+        status, body, headers = self.request(f"/api/result-file?project={project_id}&id={blade_id}&part=handoff")
+        self.assertEqual((status, body), (200, encoded(handoff)))
+        self.assertIn("attachment", headers["Content-Disposition"])
+
+    def test_station_layout_resize_validation_export_and_restore(self):
+        _, body, _ = self.request("/api/new", {"name": "評価断面API検証", "template": "single_shaft"})
+        project = json.loads(body)["project"]
+        pid = project["id"]
+        settings = {"compressor_stages": 2, "turbine_stages": 3, "axial_guide_vanes": True}
+        apply = {"id": pid, "revision": 1, "layout": settings}
+        for invalid in ({**settings, "compressor_stages": 0}, {**settings, "turbine_stages": True},
+                        {**settings, "axial_guide_vanes": "no"}):
+            self.assertEqual(self.request("/api/station-layout", {**apply, "layout": invalid})[0], 400)
+        status, body, _ = self.request("/api/station-layout", apply)
+        self.assertEqual(status, 200)
+        saved = json.loads(body)
+        self.assertEqual(saved["revision"], 2)
+        project = saved["project"]
+        self.assertEqual(project["station_layout"], settings)
+        stations = project["stations"]
+        by_code = {s["code"]: s for s in stations}
+        engine = {s["code"]: (s["cycle_station_id"], s["cooled_cycle_station_id"]) for s in stations if s["group"] == "engine"}
+        self.assertEqual(engine, {"GT-0": ("0", "0"), "GT-2": ("1", "1"), "GT-3": ("2", ""),
+                                  "GT-31": ("", "2"), "GT-4": ("3", "3"), "GT-405": ("", ""),
+                                  "GT-41": ("", ""), "GT-5": ("4", "4"), "GT-6": ("", ""), "GT-8": ("", "")})
+        for component, reference in (("CP-OUT", "GT-3"), ("CB-IN", "GT-31"), ("TB-IN", "GT-4"),
+                                     ("TB-01-NGV-TE", "GT-405"), ("TB-OUT", "GT-5"),
+                                     ("TB-EXD-IN", "GT-6"), ("TB-EXD-OUT", "GT-8")):
+            self.assertEqual(by_code[component]["engine_station_id"], by_code[reference]["id"])
+        self.assertEqual(len(stations), 50)
+        self.assertLess(by_code["CP-BEND-OUT"]["sequence"], by_code["CP-AGV-LE"]["sequence"])
+        self.assertLess(by_code["TB-03-ROT-TE"]["sequence"], by_code["TB-EXD-IN"]["sequence"])
+        for code, field, value in (("CP-IN", "component_id", by_code["TB-IN"]["component_id"]),
+                                   ("GT-2", "cycle_station_id", "0"),
+                                   ("GT-3", "cooled_cycle_station_id", "2"),
+                                   ("CB-IN", "engine_station_id", by_code["TB-IN"]["id"]),
+                                   ("CP-OUT", "sequence", True), ("GT-4", "code", " gt-3 ")):
+            bad = copy.deepcopy(project)
+            next(s for s in bad["stations"] if s["code"] == code)[field] = value
+            self.assertEqual(self.request("/api/save", {"project": bad, "revision": 2})[0], 400)
+        self.assertEqual(self.request("/api/station-layout", apply)[0], 409)
+        _, body, _ = self.request("/api/station-layout", {**apply, "revision": 2})
+        self.assertEqual(json.loads(body), saved)
+
+        _, body, _ = self.request("/api/export?id=" + pid)
+        bundle = json.loads(body)
+        status, body, _ = self.request("/api/import", {"bundle": bundle})
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body)["project"]["stations"], stations)
+
+        by_code["TB-01-ROT-LE"]["basis"] = "質量流量平均"
+        custom = {**by_code["TB-01-ROT-LE"], "id": uid(), "code": "TB-PROBE", "template_key": ""}
+        project["stations"].append(custom)
+        self.assertEqual(self.request("/api/save", {"project": project, "revision": 2})[0], 200)
+        expanded = {"compressor_stages": 4, "turbine_stages": 5, "axial_guide_vanes": True}
+        status, body, _ = self.request("/api/station-layout", {**apply, "revision": 3, "layout": expanded})
+        self.assertEqual(status, 200)
+        enlarged = {s["code"]: s for s in json.loads(body)["project"]["stations"]}
+        self.assertIn("CP-03-RC-TE", enlarged)
+        self.assertIn("CP-04-DIF-OUT", enlarged)
+        self.assertIn("TB-05-ROT-TE", enlarged)
+        reduced = {"compressor_stages": 1, "turbine_stages": 1, "axial_guide_vanes": False}
+        status, body, _ = self.request("/api/station-layout", {**apply, "revision": 4, "layout": reduced})
+        self.assertEqual(status, 200)
+        updated = {s["code"]: s for s in json.loads(body)["project"]["stations"]}
+        for obsolete in ("GT-405", "TB-03-ROT-TE", "CP-02-IMP-LE", "CP-01-RC-TE", "CP-AGV-TE"):
+            self.assertNotIn(obsolete, updated)
+        self.assertEqual(updated["TB-01-NGV-TE"]["engine_station_id"], updated["GT-41"]["id"])
+        self.assertEqual(updated["TB-EXD-OUT"]["id"], by_code["TB-EXD-OUT"]["id"])
+        self.assertEqual(updated["TB-01-ROT-LE"]["basis"], "質量流量平均")
+        self.assertEqual(updated["TB-PROBE"], custom)
+        _, body, _ = self.request("/api/history?id=" + pid)
+        old = next(h for h in json.loads(body) if h["revision"] == 1)
+        status, body, _ = self.request("/api/restore", {"id": pid, "revision": 5, "history_id": old["id"]})
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body)["project"].get("stations", []), [])
+
+    def test_station_layout_migrates_previous_numbering(self):
+        _, body, _ = self.request("/api/new", {"name": "旧評価断面", "template": "single_shaft"})
+        project = json.loads(body)["project"]
+        legacy = [{"id": uid(), "group": "engine", "code": f"GT-0{i}", "sequence": i,
+                   "name": f"旧断面 {i}", "cycle_station_id": str(i)} for i in range(6)]
+        return_id = uid()
+        legacy.append({"id": return_id, "group": "compressor", "code": "CP-RC-LE", "sequence": 60,
+                       "name": "旧リターン入口", "basis": "旧案件の指定"})
+        project["stations"] = legacy
+        self.assertEqual(self.request("/api/save", {"project": project, "revision": 1})[0], 200)
+        status, body, _ = self.request("/api/station-layout", {"id": project["id"], "revision": 2,
+            "layout": {"compressor_stages": 2, "turbine_stages": 3, "axial_guide_vanes": True}})
+        self.assertEqual(status, 200)
+        stations = {s["code"]: s for s in json.loads(body)["project"]["stations"]}
+        self.assertEqual(stations["GT-3"]["id"], legacy[2]["id"])
+        self.assertEqual(stations["GT-5"]["id"], legacy[4]["id"])
+        self.assertNotIn("GT-05", stations)
+        self.assertEqual(stations["CP-01-RC-LE"]["id"], return_id)
+        self.assertEqual(stations["CP-01-RC-LE"]["basis"], "旧案件の指定")
 
     def test_invalid_payload_rejected_and_app_assets_served(self):
         self.assertEqual(self.request("/api/new", {"name": "   "})[0], 400)
