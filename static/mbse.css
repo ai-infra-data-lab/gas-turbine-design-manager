@@ -1,0 +1,28 @@
+.mbse-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.mbse-filter select { max-width: 360px; }
+.mbse-flow { margin-top: 8px; }
+.mbse-flow .flow-node { padding: 6px 10px; min-width: 0; }
+.mbse-flow small { display: block; color: var(--muted); }
+.mbse-case + .mbse-case { border-top: 1px solid var(--line); margin-top: 10px; padding-top: 10px; }
+.mbse-case .heading-actions { margin: 6px 0; }
+.mbse-fail { color: #8d3535; background: #fbeceb; }
+.mbse-detail { margin: 6px 0; }
+.mbse-detail summary { color: var(--accent); cursor: pointer; }
+.mbse-detail p { white-space: pre-wrap; }
+.mbse-hash { overflow-wrap: anywhere; }
+.mbse-links { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 12px; }
+.mbse-links dd { margin: 0; }
+.mbse-links dt { color: var(--muted); }
+.mbse-inputs, .mbse-records { margin: 8px 0; padding-left: 20px; }
+.panel-body.mbse-records { margin-left: 20px; }
+.mbse-records li + li, .mbse-inputs li + li { margin-top: 6px; }
+.mbse-check-group { border: 1px solid var(--line); border-radius: 5px; margin: 0 0 16px; padding: 8px 12px; }
+.mbse-check-group label { display: block; padding: 3px 0; }
+.mbse-check-group input, .mbse-confirm input { width: auto; }
+.mbse-confirm { display: block; margin-bottom: 16px; }

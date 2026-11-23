@@ -135,6 +135,10 @@ def validate_project(raw):
         result["stations"] = evaluation_stations(raw["stations"], components)
     if "station_layout" in raw:
         result["station_layout"] = validate_layout(raw["station_layout"])
+    if "mbse" in raw:
+        from mbse import validate as validate_mbse
+
+        result["mbse"] = validate_mbse(raw["mbse"], result)
     component_ids = {x["id"] for x in components}
 
     def component_ref(item):
@@ -182,6 +186,12 @@ def validate_project(raw):
 
 
 def new_project(name, code="", template="blank"):
+    if template == "mbse_example":
+        from mbse_example import populate
+
+        project = new_project(name, code, "single_shaft")
+        populate(project)
+        return validate_project(project)
     project = {"schema_version": SCHEMA, "id": uid(), "name": name, "code": code,
                "application": "", "architecture": "", "owner": "", "purpose": "",
                "status": "draft", "requirements": [], "components": [], "notes": [],

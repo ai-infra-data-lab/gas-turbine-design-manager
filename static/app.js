@@ -4,7 +4,7 @@ const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt
 const id = () => crypto.randomUUID();
 const statuses = {draft:"構想・未着手",designing:"設計中",reviewing:"確認中",approved:"確定",archived:"保管"};
 const kinds = {inlet:"吸気系",compressor:"圧縮機",combustor:"燃焼器",turbine:"タービン",exhaust:"排気系",shaft:"ロータ・軸",bearing:"軸受",casing:"ケーシング",heat_exchanger:"熱交換器",auxiliary:"補機",other:"その他"};
-const tabs = {overview:"概要",components:"部品構成",parameters:"仕様・設計値",stations:"評価断面",results:"設計成果物",files:"資料",notes:"設計メモ",history:"変更履歴",compare:"設計案の比較"};
+const tabs = {overview:"概要",components:"部品構成",parameters:"仕様・設計値",mbse:"要求・検証",stations:"評価断面",results:"設計成果物",files:"資料",notes:"設計メモ",history:"変更履歴",compare:"設計案の比較"};
 const stationGroups = {
   engine: {label:"ガスタービン全体", prefix:"GT"}, compressor: {label:"圧縮機設計", prefix:"CP"},
   turbine: {label:"タービン設計", prefix:"TB"}, combustor: {label:"燃焼器設計", prefix:"CB"}
@@ -172,6 +172,56 @@ function resultRow(item, projectId) {
       <td>${esc(item.component_name)}</td><td>Rev. ${item.source_revision}<div>${state}</div></td>
       <td><a href="${base}primary" download>比較一式JSON</a></td></tr>`;
   }
+  if (item.kind === "cooling") {
+    const total = item.injections.reduce((sum, row) => sum + row.flow_kg_s, 0);
+    const feedback = {design_point_once:"サイクルへ1回反映", coupled_design_point:"サイクルと反復収束",
+                      coupled_not_converged:"サイクル連成は未収束"}[item.cycle_feedback] || item.cycle_feedback;
+    const point = item.operating_point;
+    return `<tr><td><strong>${esc(item.name)}</strong>
+      <div class="subtle">${item.injections.length}注入点 · ${(total * 1000).toPrecision(5)} g/s · ${esc(feedback)}</div>
+      <details><summary>評価断面・境界条件</summary>
+      ${point ? `<p>${point.shaft_speed_rpm.toLocaleString("ja-JP")} rpm · 入口空気流量 ${point.air_mass_flow_kg_s.toPrecision(5)} kg/s</p>` : ""}
+      ${item.injections.map(row => `<p><strong>${esc(row.station)}</strong> ${esc(row.station_name)}
+        <br>流量 ${(row.flow_kg_s * 1000).toPrecision(5)} g/s · 絶対全温 ${row.total_temperature_k.toFixed(2)} K
+        <br>排出先絶対静圧 ${(row.backpressure_pa / 1000).toFixed(3)} kPa · 供給絶対全圧 ${(row.supply_total_pressure_pa / 1000).toFixed(3)} kPa</p>`).join("")}
+      <div class="subtle">元サイクル実行ID ${esc(item.run_id)}<br>入力SHA-256 ${esc(item.input_hash)}</div></details></td>
+      <td>${esc(item.component_name)}</td><td>Rev. ${item.source_revision}<div>${state}</div></td>
+      <td><a href="${base}primary" download>冷却連携JSON</a></td></tr>`;
+  }
+  if (item.kind === "suite") {
+    const m = item.metrics;
+    const hasReview = item.bundle_available && item.support_review;
+    return `<tr><td><strong>${esc(item.name)}</strong><div class="subtle">正味出力 ${(m.net_electric_power_w / 1000).toFixed(3)} kW ·
+      冷却空気 ${(m.coolant_flow_kg_s * 1000).toPrecision(5)} g/s · 冷却連成 ${m.coupling_iterations}回 ·
+      レポート ${item.artifact_count}件 · ${item.bundle_available ? "原本保管済み" : "要約保管済み"}</div>
+      ${hasReview ? `<details><summary>熱・二次空気・軸系</summary>${button("load-support-review","結果を表示",`data-id="${item.id}"`,"small")}
+      <div id="support-review-${item.id}" aria-live="polite"></div></details>` : ""}</td><td>${esc(item.component_name)}</td>
+      <td>Rev. ${item.source_revision}<div>${state}</div></td>
+      <td><div class="row-actions"><a href="${base}primary" download>要約JSON</a>
+      ${item.bundle_available ? `<a href="${base}bundle" download>詳細レポート一式ZIP</a>` : ""}
+      ${hasReview ? `<a href="${base}support-review" download>定格レビューJSON</a>` : ""}</div></td></tr>`;
+  }
+  if (item.kind === "station-review") {
+    const pressure = value => value == null ? "—" : (value / 1000).toLocaleString("ja-JP", {maximumFractionDigits:4});
+    const area = value => value == null ? "—" : (value * 1e6).toLocaleString("ja-JP", {maximumFractionDigits:2});
+    const csv = item.pressure_csv, sourceKinds = {test:"試験", cfd:"CFD", synthetic:"仮想"};
+    return `<tr><td><strong>${esc(item.name)}</strong><div class="subtle">${item.stations.length}断面 · ${item.losses.length}損失区間
+      ${csv ? ` · ${sourceKinds[csv.kind]}CSV` : ""}</div><details><summary>面積・絶対全圧と全圧損失</summary>
+      ${csv ? `<p>${sourceKinds[csv.kind]}CSV · ${esc(csv.reference)}</p>` : ""}
+      <div class="table-wrap"><table><thead><tr><th>評価断面</th><th>面積 mm²</th><th>モデル絶対全圧 kPa</th><th>CSV絶対全圧 kPa</th></tr></thead>
+      <tbody>${item.stations.map(row => `<tr><th scope="row">${esc(row.code)} ${esc(row.station_name)}</th>
+        <td>${area(row.area_m2)}<div class="subtle">${esc(row.area_basis)}</div></td>
+        <td>${pressure(row.model_total_pressure_pa)}<div class="subtle">${esc(row.pressure_basis)}</div></td>
+        <td>${pressure(row.observed_total_pressure_pa)}</td></tr>`).join("")}</tbody></table></div>
+      <div class="table-wrap"><table><thead><tr><th>全圧損失区間</th><th>モデル kPa</th><th>CSV kPa</th></tr></thead>
+      <tbody>${item.losses.map(row => `<tr><th scope="row">${esc(row.name)}<div class="subtle">${esc(row.inlet)} → ${esc(row.outlet)}</div></th>
+        <td>${pressure(row.model_loss_pa)}</td><td>${pressure(row.observed_loss_pa)}</td></tr>`).join("")}</tbody></table></div>
+      <div class="subtle">遠心翼形状SHA-256 ${esc(item.geometry.compressor.geometry_sha256)}<br>
+        軸流タービン設計SHA-256 ${esc(item.geometry.turbine.geometry_sha256)}</div></details></td>
+      <td>${esc(item.component_name)}</td><td>Rev. ${item.source_revision}<div>${state}</div></td>
+      <td><div class="row-actions"><a href="${base}primary" download>評価断面照合JSON</a>
+      ${item.blade_result_id ? `<a href="/api/result-file?project=${projectId}&id=${item.blade_result_id}&part=primary" download>対応する翼形状JSON</a>` : ""}</div></td></tr>`;
+  }
   const file = `<a href="${base}primary" download>${isBlade ? "翼形状JSON" : "結果JSON"}</a>`;
   const handoff = isBlade ? `<a href="${base}handoff" download>手渡し記録</a>` : "";
   const summary = [];
@@ -194,19 +244,139 @@ function resultRow(item, projectId) {
     <td><div class="row-actions">${file}${handoff}</div></td></tr>`;
 }
 
+async function loadSupportReview(resultId) {
+  const target = $(`#support-review-${resultId}`);
+  if (!target) return;
+  const projectId = p().id;
+  target.textContent = "定格レビューを読み込んでいます…";
+  try {
+    const data = await api(`/api/result-file?project=${projectId}&id=${resultId}&part=support-review`);
+    if (!target.isConnected) return;
+    const num = value => value == null ? "—" : Number(value).toLocaleString("ja-JP", {maximumSignificantDigits:7});
+    const table = (title, headers, rows) => `<h3>${title}</h3><div class="table-wrap"><table><thead><tr>${
+      headers.map(value=>`<th>${esc(value)}</th>`).join("")}</tr></thead><tbody>${
+      rows.map(row=>`<tr>${row.map(value=>`<td>${esc(value)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+    const thermal = data.combustor_thermal, profile = thermal.outlet_profile;
+    const mechanical = data.mechanical, cooling = data.cooling;
+    const sections = [];
+    if (profile) sections.push(table("燃焼器出口の全温", ["区画","質量流量比","全温 K"],
+      profile.sectors.map(row=>[row.id,num(row.mass_fraction),num(row.total_temperature_k)])),
+      `<p>パターンファクター ${num(profile.pattern_factor)}</p>`);
+    if (thermal.liner_segments) sections.push(table("ライナ温度", ["区間","高温側 K","冷却側 K","温度余裕 K"],
+      thermal.liner_segments.map(row=>[row.id,num(row.hot_wall_temperature_k),num(row.cold_wall_temperature_k),num(row.temperature_margin_k)])));
+    const history = cooling.coupling?.iterations || [];
+    sections.push(table("二次空気の収束履歴", ["反復","最大圧差 Pa","最大温度差 K","最大流量差 kg/s"],
+      history.map((row,i)=>[i+1,num(row.max_pressure_difference_pa),num(row.max_temperature_difference_k),num(row.max_flow_change_kg_s)])));
+    if (data.observations) {
+      const observed = data.observations, kinds = {test:"試験",cfd:"CFD",synthetic:"仮想"};
+      sections.push(`<p>${esc(kinds[observed.kind])}CSV · ${esc(observed.reference)}</p>`,
+        table("測定CSVとの照合", ["測定点","単位","計算","CSV","差","不確かさ"],
+          observed.rows.map(row=>[row.measurement_id,row.unit,num(row.calculated),num(row.observed),num(row.difference),num(row.uncertainty)])));
+    }
+    sections.push(`<p>軸系の定格回転数 ${num(mechanical.shaft_speed_rpm)} rpm</p>`);
+    sections.push(table("段別軸力・スラスト軸受", ["条件","評価項目","力 N"],
+      Object.entries(mechanical.axial_cases).flatMap(([name,row])=>[
+        ...row.stages.map(stage=>[name,`第${stage.stage}段の軸力`,num(stage.force_n)]),
+        [name,"スラスト軸受反力",num(row.bearing_reaction_n)]])));
+    sections.push(table("軸締結", ["条件","継手","引張荷重 N","トルク N·m","最大使用率"],
+      Object.entries(mechanical.axial_cases).flatMap(([name,row])=>row.joints.map(joint=>[
+        name,({spline:"スプライン",curvic:"カービック"})[joint.kind] || joint.kind,
+        num(joint.tension_n),num(joint.torque_n_m),num(joint.maximum_utilization)]))));
+    sections.push(table("給油余裕", ["条件","軸受","油温 °C","流量余裕 L/min","ゲージ圧余裕 kPa"],
+      Object.entries(mechanical.oil_conditions).flatMap(([name,row])=>Object.entries(row.bearings).map(([bearing,supply])=>
+        [name,bearing,num(row.temperature_c),num(supply.flow_margin_lpm),num(supply.pressure_margin_kpa)]))));
+    sections.push(table("ロータの定格応答", ["案","最寄り危険速度 rpm","危険速度との離隔 %","同期応答片振幅 µm"],
+      Object.entries(mechanical.rotor_cases).map(([name,row])=>[name,num(row.nearest_critical?.rpm),
+        num(row.separation_margin_fraction == null ? null : row.separation_margin_fraction*100),num(row.operating_amplitude_um)])));
+    sections.push(table("定格で採用した軸受係数", ["案","軸受","kxx N/m","kyy N/m","cxx N·s/m","cyy N·s/m","出典"],
+      Object.entries(mechanical.rotor_cases).flatMap(([name,row])=>row.bearings.map(bearing=>
+        [name,bearing.bearing_id,num(bearing.coefficients.kxx),num(bearing.coefficients.kyy),
+          num(bearing.coefficients.cxx),num(bearing.coefficients.cyy),bearing.source]))));
+    target.innerHTML = sections.join("");
+  } catch (error) {
+    if (target.isConnected) target.textContent = error.message;
+  }
+}
+
+function suiteComparisonPanel(items) {
+  const cases = items.filter(item => item.kind === "suite");
+  if (!cases.length) return "";
+  const eligible = cases.filter(item => item.bundle_available);
+  if (eligible.length < 2)
+    return panel("定格通しケースの比較", '<p class="hint">比較する2件に詳細レポートのJSON一式を登録してください。</p>');
+  const options = selectedId => eligible.map(item => `<option value="${item.id}" ${item.id === selectedId ? "selected" : ""}>${
+    esc(item.name)} · Rev. ${item.source_revision} · ${esc(date(item.saved_at))}</option>`).join("");
+  return panel("定格通しケースの比較", `<form id="suite-compare-form" class="panel-body">
+    <div class="form-grid">
+      <label class="field"><span>基準ケース</span><select name="reference">${options(eligible[1].id)}</select></label>
+      <label class="field"><span>比較ケース</span><select name="candidate">${options(eligible[0].id)}</select></label>
+    </div><button class="button primary small" type="submit">運転点と結果を比較</button>
+    <div id="suite-comparison-output" aria-live="polite"></div></form>`);
+}
+
+function renderSuiteComparison(comparison) {
+  const number = new Intl.NumberFormat("ja-JP", {maximumSignificantDigits:8});
+  const difference = new Intl.NumberFormat("ja-JP", {maximumSignificantDigits:8, signDisplay:"exceptZero"});
+  const modes = {airflow:"入口空気流量指定", target_power:"目標出力指定"};
+  const format = value => value == null ? "—" : typeof value === "number" ? number.format(value) : esc(modes[value] || value);
+  const names = comparison.cases.map(item => `${esc(item.name)}<br>Rev. ${item.source_revision}
+    ${item.source_kind === "synthetic" ? " · 仮想" : ""}${item.outdated ? ' <span class="badge reviewing">再評価が必要</span>' : ""}
+    ${item.related_blades.some(blade=>blade.replaced_by) ? ' <span class="badge reviewing">対応する翼形状を再照合</span>' : ""}`);
+  const rows = (items, field) => items.map(item => `<tr class="${item.match === false ? "changed" : ""}">
+    <th scope="row">${esc(item.label)}</th><td>${esc(item.unit)}</td>
+    <td>${format(item.reference)}</td><td>${format(item.candidate)}</td>
+    <td>${field === "match" ? (item.match ? "一致" : "差あり") :
+      item.delta == null ? "—" : difference.format(item.delta) + (item.unit === "%" ? " pt" : "")}</td></tr>`).join("");
+  const table = (items, field, label) => `<div class="table-wrap"><table><thead><tr><th>項目</th><th>単位</th>
+    <th>${names[0]}</th><th>${names[1]}</th><th>${label}</th></tr></thead><tbody>${rows(items, field)}</tbody></table></div>`;
+  return `<p class="hint">${comparison.same_operating_point ? "運転点の比較条件が一致しています。" :
+    "運転点の比較条件に差があります。差分欄は省略します。"}</p>
+    <h3>運転点の照合</h3>${table(comparison.conditions, "match", "照合")}
+    <h3>計算結果</h3>${table(comparison.metrics, "delta", "比較 − 基準")}`;
+}
+
+function bindSuiteComparison(target, projectId) {
+  const form = target.querySelector("#suite-compare-form");
+  if (!form) return;
+  const output = form.querySelector("#suite-comparison-output");
+  let sequence = 0;
+  form.onchange = () => { sequence++; output.replaceChildren(); };
+  form.onsubmit = async event => {
+    event.preventDefault();
+    const request = ++sequence;
+    const selected = new FormData(form);
+    if (selected.get("reference") === selected.get("candidate")) {
+      output.textContent = "基準と比較に別々のケースを選択してください。";
+      return;
+    }
+    const query = new URLSearchParams({id:projectId, ...Object.fromEntries(selected)});
+    output.textContent = "運転点を照合しています…";
+    try {
+      const result = await api(`/api/suite-comparison?${query}`);
+      if (output.isConnected && request === sequence) output.innerHTML = renderSuiteComparison(result);
+    } catch (error) {
+      if (output.isConnected && request === sequence) output.textContent = error.message;
+    }
+  };
+}
+
 function renderResults(target, generation, projectId) {
   const actions = button("import-cycle-result", "＋ サイクル結果を取込", "", "small primary") +
     button("import-blade-result", "＋ 翼形状を取込", "", "small") +
-    button("import-performance-result", "＋ 性能比較を取込", "", "small");
+    button("import-performance-result", "＋ 性能比較を取込", "", "small") +
+    button("import-cooling-result", "＋ 二次空気・冷却結果を取込", "", "small") +
+    button("import-suite-result", "＋ 定格通しケースを取込", "", "small") +
+    button("import-station-review-result", "＋ 評価断面照合を取込", "", "small");
   target.innerHTML = '<p class="subtle">設計成果物を読み込んでいます…</p>';
   api(`/api/results?id=${projectId}`).then(data => {
     if (!current || p().id !== projectId || generation !== listGeneration) return;
     const items = data.results.filter(item => !componentId || item.component_id === componentId);
     const body = items.length ? `<div class="table-wrap"><table><thead><tr><th>成果物</th><th>登録先</th><th>入力元の設計版</th><th>保存ファイル</th></tr></thead>
       <tbody>${items.map(item=>resultRow(item, projectId)).join("")}</tbody></table></div>` :
-      empty("設計成果物がまだありません", "サイクル結果・翼形状・性能比較を設計版に紐付けて記録できます。");
+      empty("設計成果物がまだありません", "サイクル結果・翼形状・性能比較・二次空気を設計版に紐付けて記録できます。");
     target.innerHTML = scopeSelect() + `<div class="hint">現行は Rev. ${data.revision}。過去の設計版や差し替え済みの翼形状に紐付く性能比較は「再評価が必要」と表示します。</div>` +
-      panel("設計成果物", body, actions);
+      suiteComparisonPanel(items) + panel("設計成果物", body, actions);
+    bindSuiteComparison(target, projectId);
   }).catch(e => {
     if (!current || p().id !== projectId || generation !== listGeneration) return;
     target.textContent = e.message;
@@ -222,6 +392,8 @@ function renderTab(){const target=$("#tab-content");if(!target)return;const gene
   } else if(activeTab==="parameters"){
     const c=selected();const values=c?c.parameters:p().requirements;
     target.innerHTML=scopeSelect()+(c?`<div class="hint"><strong>${esc(c.name)}</strong> · ${esc(kinds[c.kind])} · ${esc(c.stage || "位置未設定")}<br>${esc(c.description || "部品メモは未記入です。")}</div>`:'<p class="subtle">案件全体の要求仕様・運転条件を登録します。部品ごとの項目は対象を切り替えて管理できます。</p>')+panel(c?`${esc(c.name)}の設計値`:"要求仕様・運転条件",values.length?`<div class="table-wrap"><table><thead><tr><th>項目</th><th>値</th><th>単位</th><th>出典・根拠 / 備考</th><th>操作</th></tr></thead><tbody>${values.map(v=>`<tr><td>${esc(v.name)}</td><td class="value">${emptyValue(v.value)}</td><td>${esc(v.unit || "—")}</td><td>${emptyValue(v.source)}${v.note?`<div class="subtle">${esc(v.note)}</div>`:""}</td><td><div class="row-actions"><button class="text-button" data-action="edit-parameter" data-id="${v.id}">編集</button><button class="text-button danger" data-action="delete-parameter" data-id="${v.id}">削除</button></div></td></tr>`).join("")}</tbody></table></div>`:empty("設計項目がまだありません","値が未定でも、項目名・単位・根拠を先に登録できます。"),button("new-parameter","＋ 項目を追加","","primary small"));
+  } else if(activeTab==="mbse"){
+    mbse.render(target,generation,p().id);
   } else if(activeTab==="stations"){
     renderStations(target);
   } else if(activeTab==="results"){
@@ -268,18 +440,22 @@ async function resultForm(kind) {
   const projectId = p().id, revision = current.revision;
   const [history, listed] = await Promise.all([
     api(`/api/history?id=${projectId}`),
-    kind === "cycle" ? null : api(`/api/results?id=${projectId}`),
+    ["blade", "performance"].includes(kind) ? api(`/api/results?id=${projectId}`) : null,
   ]);
   if (!current || p().id !== projectId || current.revision !== revision) return;
   const isBlade = kind === "blade";
   const isPerformance = kind === "performance";
+  const isSuite = kind === "suite";
+  const isStationReview = kind === "station-review";
   const shapes = listed?.results.filter(item=>item.kind === "blade" && item.stage1_share != null) || [];
   const revisions = Object.fromEntries(history.map(item => [item.revision, `Rev. ${item.revision}`]));
   const componentOptions = parts => ({"":"案件全体", ...Object.fromEntries(parts.map(part=>[part.id, part.name]))});
   const fileInput = (name, label) => `<label class="field"><span>${label} *</span><input type="file" name="${name}" accept=".json,application/json" required></label>`;
   const primaryLabel = {blade:"Blade DesignerプロジェクトJSON", cycle:"サイクルケースJSONまたは2段設計一式JSON",
-                        performance:"Cycle Studioの比較一式JSON"}[kind];
-  const title = {blade:"翼形状を取込", cycle:"サイクル結果を取込", performance:"性能比較を取込"}[kind];
+                        performance:"Cycle Studioの比較一式JSON", cooling:"二次空気・サイクルへの反映の連携結果一式JSON",
+                        suite:"定格通しケースの suite-report.json", "station-review":"評価断面照合レポートJSON"}[kind];
+  const title = {blade:"翼形状を取込", cycle:"サイクル結果を取込", performance:"性能比較を取込",
+                 cooling:"二次空気・冷却結果を取込", suite:"定格通しケースを取込", "station-review":"評価断面照合を取込"}[kind];
   const shareFields = [
     {name:"equal_blade", label:"均等配分案の翼形状", share:.5},
     {name:"seventy_five_blade", label:"75%配分案の翼形状", share:.75},
@@ -294,8 +470,10 @@ async function resultForm(kind) {
   }
   const fields = '<p class="subtle">成果物の入力元にあたる設計版と部品を選んでください。入力元の記載がない成果物は、この指定で紐付けます。</p>' +
     field("source_revision", "入力元の設計版", String(revision), {select: revisions}) +
-    field("result_component", "関連部品", componentId, {select: componentOptions(p().components)}) +
-    shapeFields + fileInput("primary", primaryLabel) + (isBlade ? fileInput("handoff", "対応する .handoff.json") : "");
+    field("result_component", "関連部品", isStationReview ? "" : componentId, {select: componentOptions(p().components)}) +
+    shapeFields + fileInput("primary", primaryLabel) + (isBlade ? fileInput("handoff", "対応する .handoff.json") : "") +
+    (isSuite ? '<label class="field"><span>詳細レポートのJSON一式（任意）</span><input id="suite-detail-files" type="file" multiple accept=".json,application/json"></label>' +
+      '<p class="subtle">原本も保管する場合は、出力フォルダーの詳細JSONをすべて選択してください。要約と合わせて30 MB以内です。</p>' : "");
   modal(title, fields, async data => {
     const payload = {id: projectId, revision, source_revision: Number(data.source_revision),
                      component_id: data.result_component, kind, primary: await encodeFile(data.primary, primaryLabel)};
@@ -304,9 +482,20 @@ async function resultForm(kind) {
       if (data.replaces_blade) payload.replaces_blade_id = data.replaces_blade;
     }
     if (isPerformance) payload.blade_ids = {equal:data.equal_blade, "75-percent":data.seventy_five_blade};
+    if (isSuite) {
+      const files = [...$("#suite-detail-files").files];
+      if (files.length) {
+        if (files.length > 40 || files.reduce((size, file) => size + file.size, data.primary.size) > 30 * 1024 * 1024)
+          throw Error("詳細レポートは40件まで、要約と合わせて30 MB以内です。");
+        payload.suite_files = [];
+        for (const file of files)
+          payload.suite_files.push({name:file.name, data:await encodeFile(file, file.name)});
+      }
+    }
     const outcome = await api("/api/result-import", payload);
     renderTab();
-    toast(outcome.created ? "設計成果物を登録しました" : `すでに Rev. ${outcome.result.source_revision} に登録されています`);
+    toast(outcome.created ? "設計成果物を登録しました" : outcome.bundle_added ? "詳細レポート一式を追加しました" :
+      `すでに Rev. ${outcome.result.source_revision} に登録されています`);
   }, "登録する");
   const revisionInput = $("#field-source_revision"), componentInput = $("#field-result_component");
   const shapeInputs = isBlade ? [{name:"replaces_blade", share:null}] : isPerformance ? shareFields : [];
@@ -347,7 +536,33 @@ async function resultForm(kind) {
 function confirmAction(message){return new Promise(resolve=>{const dialog=$("#confirmation");$("#confirm-message").textContent=message;const finish=value=>{dialog.close();dialog.oncancel=null;resolve(value);};$("#confirm-yes").onclick=()=>finish(true);$("#confirm-no").onclick=()=>finish(false);dialog.oncancel=event=>{event.preventDefault();finish(false);};dialog.showModal();$("#confirm-no").focus();});}
 async function closeModal(){if(formBusy)return;if(formDirty&&!await confirmAction("入力中の内容を破棄して閉じますか？"))return;$("#editor").close();formDirty=false;}
 async function saveDraft(draft){current=await api("/api/save",{project:draft,revision:current.revision});await refresh();if(componentId&&!p().components.some(c=>c.id===componentId))componentId="";render();toast("設計情報を保存しました");}
-function projectForm(isNew){const x=isNew?{}:p();modal(isNew?"新規プロジェクト":"プロジェクトの基本情報",field("name","案件名",x.name,{required:true,max:150,placeholder:"例：小型発電用ガスタービン"})+`<div class="form-grid">${field("code","案件番号",x.code,{max:80})}${isNew?field("template","初期構成","single_shaft",{select:{single_shaft:"一軸ガスタービン（値は未設定）",blank:"空のプロジェクト"}}):field("status","状態",x.status,{select:statuses})}</div>`+(isNew?"":`<div class="form-grid">${field("application","用途",x.application,{max:100,placeholder:"発電用・航空用・研究用など"})}${field("architecture","エンジン構成",x.architecture,{max:150})}</div>${field("owner","担当",x.owner,{max:100})}${field("purpose","設計の目的・要求",x.purpose,{area:true,max:10000})}`),async data=>{if(isNew){current=await api("/api/new",data);activeTab="overview";componentId="";comparison=null;await refresh();render();toast("プロジェクトを作成しました");}else{const draft=structuredClone(p());Object.assign(draft,data);await saveDraft(draft);}},isNew?"作成する":"保存する");}
+function projectForm(isNew) {
+  const x = isNew ? {} : p();
+  const templates = {single_shaft:"一軸ガスタービン（値は未設定）", blank:"空のプロジェクト",
+    mbse_example:"MBSE仮想例（定格発電・冷間始動）"};
+  const fields = field("name","案件名",x.name,{required:true,max:150,placeholder:"例：小型発電用ガスタービン"})
+    + `<div class="form-grid">${field("code","案件番号",x.code,{max:80})}
+    ${isNew ? field("template","初期構成","single_shaft",{select:templates}) : field("status","状態",x.status,{select:statuses})}</div>`;
+  const details = isNew ? "" : `<div class="form-grid">
+    ${field("application","用途",x.application,{max:100,placeholder:"発電用・航空用・研究用など"})}
+    ${field("architecture","エンジン構成",x.architecture,{max:150})}</div>
+    ${field("owner","担当",x.owner,{max:100})}${field("purpose","設計の目的・要求",x.purpose,{area:true,max:10000})}`;
+  modal(isNew ? "新規プロジェクト" : "プロジェクトの基本情報", fields + details, async data => {
+    if (isNew) {
+      current = await api("/api/new",data);
+      activeTab = data.template === "mbse_example" ? "mbse" : "overview";
+      componentId = "";
+      comparison = null;
+      await refresh();
+      render();
+      toast("プロジェクトを作成しました");
+    } else {
+      const draft = structuredClone(p());
+      Object.assign(draft,data);
+      await saveDraft(draft);
+    }
+  }, isNew ? "作成する" : "保存する");
+}
 function clearStationComponent(draft, componentId) {
   for (const item of draft.stations || []) {
     if (item.component_id === componentId) item.component_id = "";
@@ -375,6 +590,12 @@ document.addEventListener("click",async event=>{const el=event.target.closest("[
   else if(action==="select-component"){componentId=el.dataset.id;activeTab="parameters";render();}
   else if(action==="new-component"||action==="edit-component")componentForm(el.dataset.id);
   else if(action==="new-parameter"||action==="edit-parameter")parameterForm(el.dataset.id);
+  else if(action==="mbse-edit")mbse.edit(el.dataset.group,el.dataset.id);
+  else if(action==="mbse-add-case")mbse.edit("cases","",el.dataset.id);
+  else if(action==="mbse-remove")await mbse.remove(el.dataset.group,el.dataset.id);
+  else if(action==="mbse-record")await mbse.record(el.dataset.id);
+  else if(action==="mbse-focus")mbse.focus(el.dataset.id);
+  else if(action==="mbse-parameter"){componentId=el.dataset.component;parameterForm(el.dataset.id);}
   else if(action==="new-station"||action==="edit-station")stationForm(el.dataset.id);
   else if(action==="station-preset")stationPresetForm();
   else if(action==="remove-station")await removeStation(el.dataset.id);
@@ -385,7 +606,9 @@ document.addEventListener("click",async event=>{const el=event.target.closest("[
   else if(action==="clone")modal("設計案を複製",field("name","新しい設計案の名前",p().name.slice(0,140)+"（別案）",{required:true,max:150})+'<p class="subtle">現在の設計情報と添付資料を複製します。元の案件は保持します。</p>',async data=>{current=await api("/api/clone",{id:p().id,name:data.name});componentId="";activeTab="overview";comparison=null;await refresh();render();toast("設計案を複製しました");},"複製する");
   else if(action==="restore"){if(await confirmAction(`Rev. ${el.dataset.revision} の状態を新しいリビジョンとして保存します。続けますか？`)){current=await api("/api/restore",{id:p().id,revision:current.revision,history_id:Number(el.dataset.id)});if(componentId&&!selected())componentId="";await refresh();render();toast("履歴を復元しました");}}
   else if(action==="import")$("#import-file").click();
-  else if(["import-cycle-result","import-blade-result","import-performance-result"].includes(action))await resultForm(action.split("-")[1]);
+  else if(["import-cycle-result","import-blade-result","import-performance-result","import-cooling-result","import-suite-result",
+           "import-station-review-result"].includes(action))await resultForm(action.slice(7,-7));
+  else if(action==="load-support-review")await loadSupportReview(el.dataset.id);
   else if(action==="upload")$("#attachment-file").click();
 }catch(e){toast(e.message,true);}finally{actionBusy=false;}});
 $("#editor-form").addEventListener("input",()=>formDirty=true);

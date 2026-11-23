@@ -10,6 +10,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, urlsplit
 
+from results import MAX_SUITE_FILES
 from store import Conflict, Store
 
 ROOT = Path(__file__).resolve().parent
@@ -20,6 +21,20 @@ def decode_upload(encoded, label):
     if not isinstance(encoded, str) or len(encoded) > 7_000_000:
         raise ValueError(f"{label}は1件5MB以内です。")
     return base64.b64decode(encoded, validate=True)
+
+
+def decode_suite_upload(entries):
+    if entries is None:
+        return None
+    if not isinstance(entries, list) or not 1 <= len(entries) <= MAX_SUITE_FILES:
+        raise ValueError("詳細レポートを1～40ファイル指定してください。")
+    files = {}
+    for entry in entries:
+        name = entry.get("name") if isinstance(entry, dict) else None
+        if not isinstance(name, str) or not 1 <= len(name) <= 66 or name in files:
+            raise ValueError("詳細レポートのファイル名を確認してください。同じ名前は1件ずつ指定してください。")
+        files[name] = decode_upload(entry.get("data"), "詳細レポート")
+    return files
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -70,9 +85,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self.json({"error": "画像が見つかりません。"}, 404)
             if url.path == "/manual/manual.css":
                 return self.send(200, (ROOT / "docs/manual/manual.css").read_bytes(), "text/css; charset=utf-8")
-            static = {"/app.js": "text/javascript; charset=utf-8", "/style.css": "text/css; charset=utf-8"}
-            if url.path in static:
-                return self.send(200, (ROOT / "static" / url.path[1:]).read_bytes(), static[url.path])
+            static = {".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8"}
+            if url.path in ("/app.js", "/mbse.js", "/style.css", "/mbse.css"):
+                path = ROOT / "static" / url.path[1:]
+                return self.send(200, path.read_bytes(), static[path.suffix])
             if url.path == "/api/projects":
                 return self.json(self.server.store.list())
             if url.path == "/api/project":
@@ -81,6 +97,16 @@ class Handler(BaseHTTPRequestHandler):
                 return self.json(self.server.store.history(get("id")))
             if url.path == "/api/results":
                 return self.json(self.server.store.design_results(get("id")))
+            if url.path == "/api/mbse-evidence":
+                return self.json(self.server.store.verification_status(get("id")))
+            if url.path == "/api/mbse-file":
+                name, content = self.server.store.verification_file(get("project"), get("id"))
+                return self.send(200, content, "application/octet-stream", filename=name)
+            if url.path == "/api/suite-comparison":
+                try:
+                    return self.json(self.server.store.suite_comparison(get("id"), get("reference"), get("candidate")))
+                except ValueError as exc:
+                    return self.json({"error": str(exc)}, 400)
             if url.path == "/api/result-targets":
                 return self.json(self.server.store.result_targets(get("id"), int(get("revision"))))
             if url.path == "/api/result-file":
@@ -123,6 +149,8 @@ class Handler(BaseHTTPRequestHandler):
                 result = store.clone(data.get("id"), data.get("name"))
             elif self.path == "/api/station-layout":
                 result = store.configure_stations(data.get("id"), data.get("revision"), data.get("layout"))
+            elif self.path == "/api/mbse-evidence":
+                result = store.register_verification(data.get("id"), data.get("revision"), data)
             elif self.path == "/api/restore":
                 result = store.restore(data.get("id"), data.get("revision"), data.get("history_id"))
             elif self.path == "/api/upload":
@@ -135,7 +163,8 @@ class Handler(BaseHTTPRequestHandler):
                     handoff = decode_upload(handoff, "手渡し記録")
                 result = store.register_result(data.get("id"), data.get("revision"), data.get("source_revision"),
                                                data.get("component_id", ""), data.get("kind"), content, handoff,
-                                               blade_ids=data.get("blade_ids"), replaces_blade_id=data.get("replaces_blade_id"))
+                                               blade_ids=data.get("blade_ids"), replaces_blade_id=data.get("replaces_blade_id"),
+                                               suite_files=decode_suite_upload(data.get("suite_files")))
             elif self.path == "/api/import":
                 result = store.import_bundle(data.get("bundle"))
             else:
